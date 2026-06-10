@@ -37,11 +37,6 @@ def _contact(a: dict) -> str:
             "call": a.get("phone") or a.get("city") or ""}.get(a["channel"], "")
 
 
-def _reload():
-    st.session_state.queue = store.pending_actions(db_path=DB)
-    st.session_state.i = 0
-
-
 def _post_digest():
     counts = store.action_counts(db_path=DB)
     rc = store.run_counts(DB)["last_run"] or {}
@@ -60,19 +55,18 @@ def _sidebar():
     st.sidebar.header("Demo controls")
     if st.sidebar.button("▶️ Run Day 1 (main pipeline)", use_container_width=True):
         pipeline.run_pipeline(FILE, sheet="pipeline", db=DB)
-        _reload(); st.rerun()
+        st.rerun()
     if st.sidebar.button("➕ Drop Day 2 (new leads)", use_container_width=True):
         pipeline.run_pipeline(FILE, sheet="new_drop_day2", db=DB)
-        _reload(); st.rerun()
+        st.rerun()
 
     st.sidebar.divider()
     if st.sidebar.button("🔁 Soft reset (refill queue)", use_container_width=True):
         n = store.reset_actions_to_drafted(db_path=DB)
-        _reload(); st.sidebar.success(f"Reset {n} actions"); st.rerun()
+        st.sidebar.success(f"Reset {n} actions"); st.rerun()
     if st.sidebar.button("🧨 Hard reset (wipe DB)", use_container_width=True):
         if os.path.exists(DB):
             os.remove(DB)
-        st.session_state.queue = []; st.session_state.i = 0
         st.sidebar.warning("DB wiped — run Day 1 to rebuild"); st.rerun()
 
     st.sidebar.divider()
@@ -106,29 +100,28 @@ def main() -> None:
     st.set_page_config(page_title="Sally — daily queue", page_icon="✉️", layout="centered")
     st.title("✉️ Sally — today's queue")
     _sidebar()
-
-    if "queue" not in st.session_state:
-        _reload()
     _stats_header()
 
-    # channel filter
+    # always read the DB — the current lead is the highest-priority still-pending action
+    pending = store.pending_actions(db_path=DB)
+    counts = store.action_counts(db_path=DB)
+    queued_today = sum(counts.values())
+    processed = queued_today - len(pending)
+
     chan = st.radio("Channel", ["All", "dm", "email", "call"], horizontal=True, key="chan")
-    if st.session_state.get("_lastchan") != chan:
-        st.session_state._lastchan = chan
-        st.session_state.i = 0
-    queue = [a for a in st.session_state.queue if chan == "All" or a["channel"] == chan]
+    filtered = [a for a in pending if chan == "All" or a["channel"] == chan]
 
     st.divider()
-    if not queue:
-        st.info("No pending actions for this filter. Use the sidebar to run the pipeline.")
+    if not pending:
+        st.success(f"🎉 All {queued_today} actions processed. Use the sidebar to run again.")
         return
-    i = st.session_state.i
-    if i >= len(queue):
-        st.success(f"🎉 All done — {len(queue)} actions processed.")
+    if not filtered:
+        st.info(f"Nothing left in **{chan}** — switch the filter ({len(pending)} still pending elsewhere).")
         return
 
-    a = queue[i]
-    st.progress(i / len(queue), text=f"{i} of {len(queue)} done")
+    a = filtered[0]
+    st.progress(processed / queued_today if queued_today else 0,
+                text=f"{processed} of {queued_today} processed")
     icon = {"dm": "📱 Instagram DM", "email": "✉️ Email", "call": "📞 Call"}.get(a["channel"], a["channel"])
     st.caption(f"{icon}  ·  {a.get('stage','')}")
     st.subheader(_display_name(a))
@@ -149,10 +142,10 @@ def main() -> None:
     c1, c2, _ = st.columns([1, 1, 3])
     if c1.button("✅ Done", use_container_width=True):
         store.set_action_status(a["action_id"], "done", DB)
-        st.session_state.i += 1; st.rerun()
+        st.rerun()
     if c2.button("⏭️ Skip", use_container_width=True):
         store.set_action_status(a["action_id"], "skipped", DB)
-        st.session_state.i += 1; st.rerun()
+        st.rerun()
 
 
 main()
