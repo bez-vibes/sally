@@ -168,7 +168,11 @@ def test_rerun_is_idempotent(tmp_path):
     assert r1["new"] == 2 and r2["new"] == 0          # re-run adds nothing
     assert store.load_leads(db).lead_key.nunique() == 2
 
-    # action one lead, then it should be in cooldown
+    # queuing a lead (drafted) does NOT count as handled — it must be completed
     store.record_action("h:x", "run2", "dm", "re_engage", "2026-02-03", "", 0.9, "test", db_path=db)
+    assert "h:x" not in store.leads_in_cooldown(4, db)
+    # mark it done -> now it's contacted and cools
+    aid = [a["action_id"] for a in store.pending_actions("run2", db) if a["lead_key"] == "h:x"][0]
+    store.set_action_status(aid, "done", db)
     assert "h:x" in store.leads_in_cooldown(4, db)
     assert "h:y" not in store.leads_in_cooldown(4, db)

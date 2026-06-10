@@ -352,20 +352,22 @@ def run_counts(db_path: str | Path = DEFAULT_DB) -> dict:
 
 
 def leads_in_cooldown(cooldown_days: int = 4, db_path: str | Path = DEFAULT_DB) -> set[str]:
-    """Lead keys that were actioned within `cooldown_days` and have NOT replied or
-    advanced since — i.e. already handled, don't re-surface them today. A reply or
-    stage change after the last action releases the lead immediately.
+    """Lead keys that were actually CONTACTED (marked sent/done) within `cooldown_days`
+    and have NOT replied or advanced since — i.e. genuinely handled, don't re-surface
+    them today. A reply or stage change after the action releases the lead immediately.
 
-    This is what stops a re-run re-messaging the same people: yesterday's 40 sit in
-    cooldown, so today's slots go to the next-best leads.
+    Only completed actions count. A lead that was merely queued (drafted) but never
+    acted on is NOT handled — it rolls forward into the next queue. This is what stops
+    a re-run re-contacting people you actually reached, while leaving untouched
+    suggestions available.
     """
     now = datetime.now(timezone.utc)
     in_cd: set[str] = set()
     with _conn(db_path) as c:
-        # drafted/sent/done cool the lead; 'skipped' does NOT (a skip resurfaces it)
+        # only completed actions cool the lead; drafted (queued) / approved / skipped do not
         rows = c.execute(
             "SELECT lead_key, MAX(at) AS last_at FROM actions "
-            "WHERE status IN ('drafted','approved','sent','done') GROUP BY lead_key"
+            "WHERE status IN ('sent','done') GROUP BY lead_key"
         ).fetchall()
         for r in rows:
             last_at = datetime.fromisoformat(r["last_at"])

@@ -87,13 +87,14 @@ def _stats_header():
     last = rc["last_run"] or {}
     remaining = len(store.pending_actions(db_path=DB))
     queued = last.get("actions_total") or sum(counts.values())
-    skipped = last.get("skipped_cooldown") or 0
+    recently_contacted = len(store.leads_in_cooldown(4, DB))  # live: grows as you mark Done
 
     cols = st.columns(4)
     cols[0].metric("Leads in store", rc["leads_total"])
     cols[1].metric("Queued today", queued)
     cols[2].metric("Remaining", remaining)
-    cols[3].metric("Skipped (already handled)", skipped)
+    cols[3].metric("Recently contacted", recently_contacted,
+                   help="Leads contacted (marked Done) in the last few days, on cooldown and not re-contacted yet.")
     st.caption(
         f"Latest run: {last.get('new_leads',0)} new · {last.get('updated_leads',0)} updated  |  "
         f"queued by channel — DM {counts.get('dm',0)} · email {counts.get('email',0)} "
@@ -128,7 +129,7 @@ def _under_the_hood():
             f"({cl['reseller_has_email']} resellers reachable off the DM cap by email)\n"
             f"- **Store** {up['new']} new · {up['updated']} updated · {up['stage_advanced']} advanced · "
             f"{up['replies']} new replies → {up['leads_total']} total leads\n"
-            f"- **Skipped** {t['cooldown_skipped']} already-handled (cooldown)\n"
+            f"- **Skipped** {t['cooldown_skipped']} recently-contacted (cooldown)\n"
             f"- **Scored** {sc['dm']} DM ({by_group}) · {sc['email']} email · {sc['deferred']} deferred\n"
             f"- **Drafted** {t['actions_total']} messages ({methods})"
         )
