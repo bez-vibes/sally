@@ -110,6 +110,20 @@ def _coalesce(group: pd.DataFrame, col: str, order_idx: list[int]):
     return pd.NA
 
 
+def _distinct(group: pd.DataFrame, col: str, order_idx: list[int], exclude=None) -> list[str]:
+    """Distinct non-blank values of `col` (most-recent first), optionally excluding one."""
+    out: list[str] = []
+    excl = "" if exclude is None or pd.isna(exclude) else str(exclude).strip()
+    for i in order_idx:
+        v = group.at[i, col]
+        if pd.isna(v):
+            continue
+        s = str(v).strip()
+        if s and s != excl and s not in out:
+            out.append(s)
+    return out
+
+
 def _merge_group(group: pd.DataFrame) -> dict:
     group = group.copy()
     # priority order: most-recently-touched row first (NaT treated as oldest)
@@ -150,6 +164,25 @@ def _merge_group(group: pd.DataFrame) -> dict:
     rec["merged_lead_ids"] = ",".join(sorted(str(x) for x in group["lead_id"].dropna()))
     rec["merged_count"] = len(group)
     rec["_batch"] = group.at[order_idx[0], "_batch"]
+
+    # --- preserved alternate / audit info from the discarded duplicate rows ---
+    # alternate contacts: extra ways to reach the lead that the winner dropped
+    rec["alt_emails"] = "; ".join(_distinct(group, "email", order_idx, exclude=rec["email"]))
+    rec["alt_phones"] = "; ".join(_distinct(group, "phone", order_idx, exclude=rec["phone"]))
+    rec["alt_handles"] = "; ".join(_distinct(group, "handle_norm", order_idx, exclude=rec["handle_norm"]))
+    # provenance
+    rec["merged_sources"] = "; ".join(_distinct(group, "source", order_idx))
+    rec["merged_batches"] = "; ".join(_distinct(group, "_batch", order_idx))
+    # merge transparency
+    merged_stages = _distinct(group, "stage", order_idx)
+    rec["merged_stages"] = ", ".join(merged_stages)
+    rec["merge_conflict"] = len(merged_stages) > 1
+    # preserved free-text intel
+    rec["merged_notes"] = " | ".join(_distinct(group, "notes", order_idx))
+    rec["alt_inbound_texts"] = " | ".join(
+        _distinct(group, "last_inbound_text", order_idx, exclude=rec["last_inbound_text"])
+    )
+
     rec["lead_key"] = _lead_key(rec)
     return rec
 
