@@ -27,6 +27,21 @@ FILE = os.getenv("SALLY_FILE", "data/raw/pipeline_data.xlsx")
 BOARD_STAGES = ["New", "Contacted", "Replied", "Warm", "Call Booked",
                 "Negotiating", "Won", "Ghosted", "Lost"]
 
+STAGE_COLOURS = {
+    "New": "#9aa0a6", "Contacted": "#6b7a8f", "Replied": "#4a90d9", "Warm": "#e8943a",
+    "Call Booked": "#3a78c2", "Negotiating": "#7e57c2", "Won": "#2e9e5b",
+    "Ghosted": "#8d6e63", "Lost": "#c0504d",
+}
+
+CARD_CSS = """
+<style>
+.lane{color:#fff;padding:5px 10px;border-radius:6px;font-weight:600;font-size:13px;
+      margin-bottom:8px;text-align:center}
+.chip{background:#ececec;color:#333;padding:1px 7px;border-radius:10px;font-size:12px}
+.badge{font-size:12px;margin-left:4px}
+</style>
+"""
+
 
 # --- formatting helpers (NaN-safe; rows may be dicts or pandas Series) ----------
 
@@ -196,6 +211,13 @@ def _explain(a: dict) -> str:
 
 # --- kanban board ---------------------------------------------------------------
 
+def _badge(lead_key, manual_status, smap: dict) -> str:
+    if str(manual_status) == "visit_booked":
+        return "📅 Visit booked"
+    return {"done": "✅ Contacted", "sent": "✅ Contacted",
+            "skipped": "⏭️ Skipped", "drafted": "🔵 Queued"}.get(smap.get(lead_key), "")
+
+
 def _board(lead_type: str):
     df = store.load_leads(DB)
     if df.empty or "lead_type" not in df.columns:
@@ -204,22 +226,29 @@ def _board(lead_type: str):
     if df.empty:
         st.info(f"No {lead_type}s yet — run Day 1 from the sidebar."); return
 
-    st.caption(f"{len(df)} {lead_type}{'s' if not df.empty else ''}, by stage. Cards show the highest-spend leads first.")
+    smap = store.action_status_map(DB)
+    st.caption(f"{len(df)} {lead_type}s by stage, highest spend first. "
+               f"Badges show what you've actioned (✅ contacted · ⏭️ skipped · 🔵 queued · 📅 visit booked).")
     cols = st.columns(len(BOARD_STAGES))
     for col, stage in zip(cols, BOARD_STAGES):
         sub = df[df["stage"] == stage].copy()
         sub["_sp"] = pd.to_numeric(sub["est_monthly_spend_gbp"], errors="coerce").fillna(0)
         sub = sub.sort_values("_sp", ascending=False)
         with col:
-            st.markdown(f"**{stage}**  \n`{len(sub)} leads`")
+            st.markdown(f"<div class='lane' style='background:{STAGE_COLOURS.get(stage,'#666')}'>"
+                        f"{stage} · {len(sub)}</div>", unsafe_allow_html=True)
             for _, r in sub.head(12).iterrows():
+                if lead_type == "reseller":
+                    extra = f" · {int(r['followers'])} foll" if _present(r.get("followers")) else ""
+                else:
+                    extra = f" · {r['city']}" if _present(r.get("city")) else ""
+                spend = _fmt_money(r.get("est_monthly_spend_gbp")) or "spend n/a"
+                badge = _badge(r.get("lead_key"), r.get("manual_status"), smap)
                 with st.container(border=True):
                     st.markdown(f"**{_display_name(r)}**")
-                    if lead_type == "reseller":
-                        extra = f" · {int(r['followers'])} foll" if _present(r.get("followers")) else ""
-                    else:
-                        extra = f" · {r['city']}" if _present(r.get("city")) else ""
-                    st.caption(f"{_fmt_money(r.get('est_monthly_spend_gbp')) or 'spend n/a'}{extra}")
+                    st.markdown(f"<span class='chip'>{spend}{extra}</span>"
+                                f"{f'<span class=badge>{badge}</span>' if badge else ''}",
+                                unsafe_allow_html=True)
             if len(sub) > 12:
                 st.caption(f"+{len(sub) - 12} more")
 
@@ -285,10 +314,16 @@ def _queue_view():
             store.set_action_status(a["action_id"], "skipped", DB); st.rerun()
         if next_c.button("Next ➡️", use_container_width=True, disabled=nav_i >= len(filtered) - 1):
             st.session_state.nav_i = nav_i + 1; st.rerun()
+        if a.get("lead_type") == "shop":
+            if st.button("📅 Book visit", use_container_width=True, key=f"bv_{a['action_id']}"):
+                store.set_manual_status(a["lead_key"], "visit_booked", DB)
+                store.set_action_status(a["action_id"], "done", DB)
+                st.rerun()
 
 
 def main() -> None:
     st.set_page_config(page_title="Sally — daily queue", page_icon="✉️", layout="wide")
+    st.markdown(CARD_CSS, unsafe_allow_html=True)
     st.title("✉️ Sally — today's queue")
     _sidebar()
     tab_q, tab_r, tab_s = st.tabs(["📥 Queue", "🧑‍💻 Resellers board", "🏬 Stores board"])

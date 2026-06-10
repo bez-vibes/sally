@@ -290,7 +290,7 @@ def pending_actions(run_id: str | None = None, db_path: str | Path = DEFAULT_DB)
                    a.group_label, a.value, a.urgency, a.days_quiet,
                    l.store_name, l.handle_norm, l.contact_name, l.stage, l.city,
                    l.email, l.phone, l.last_inbound_text, l.est_monthly_spend_gbp,
-                   l.followers, l.active_listings, l.sales_velocity_30d,
+                   l.followers, l.active_listings, l.sales_velocity_30d, l.lead_type,
                    l.merged_lead_ids, l.merged_stages, l.merge_conflict, l.merged_count,
                    l.available_channels
             FROM actions a JOIN leads l ON l.lead_key = a.lead_key
@@ -306,6 +306,23 @@ def set_action_status(action_id: int, status: str, db_path: str | Path = DEFAULT
     """Mark an action done/sent/skipped from the UI."""
     with _conn(db_path) as c:
         c.execute("UPDATE actions SET status = ? WHERE id = ?", (status, action_id))
+
+
+def set_manual_status(lead_key: str, status: str | None, db_path: str | Path = DEFAULT_DB) -> None:
+    """Set a manual override status on a lead (e.g. 'visit_booked', 'do_not_contact')."""
+    with _conn(db_path) as c:
+        c.execute("UPDATE leads SET manual_status = ?, override_at = ? WHERE lead_key = ?",
+                  (status, _now(), lead_key))
+
+
+def action_status_map(db_path: str | Path = DEFAULT_DB) -> dict:
+    """Latest action status per lead_key — for showing a badge on the boards."""
+    with _conn(db_path) as c:
+        rows = c.execute(
+            "SELECT lead_key, status FROM actions a WHERE id = "
+            "(SELECT MAX(id) FROM actions WHERE lead_key = a.lead_key)"
+        ).fetchall()
+    return {r["lead_key"]: r["status"] for r in rows}
 
 
 def lead_events(lead_key: str, db_path: str | Path = DEFAULT_DB) -> list[dict]:
