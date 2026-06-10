@@ -29,9 +29,9 @@ def _contact(row) -> str:
     ch = row.get("channel")
     if ch == "dm":
         return "@" + str(row.get("handle_norm", ""))
-    if ch in ("email",):
+    if ch == "email":
         return str(row.get("email", ""))
-    if ch in ("call", "book_visit", "visit"):
+    if ch == "call":
         return str(row.get("phone") or row.get("email") or row.get("city") or "")
     return str(row.get("handle_norm") or row.get("email") or "")
 
@@ -56,7 +56,7 @@ def build_action_rows(resellers: pd.DataFrame, shops: pd.DataFrame, due_date: st
             "lead_key": r["lead_key"],
         })
 
-    sdo = shops[shops["next_step"].isin(["email", "call", "book_visit", "visit"])]
+    sdo = shops[shops["next_step"].isin(["email", "call"])]
     for _, s in sdo.iterrows():
         rows.append({
             "lead_type": "shop", "name": _name(s),
@@ -76,41 +76,57 @@ def build_action_rows(resellers: pd.DataFrame, shops: pd.DataFrame, due_date: st
     return df
 
 
-def write_queue(df: pd.DataFrame, out_dir: str | Path, run_date: str) -> dict:
+def write_queue(df: pd.DataFrame, out_dir: str | Path, run_date: str,
+                visit_plan: pd.DataFrame | None = None) -> dict:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     csv_path = out_dir / f"actions_{run_date}.csv"
     md_path = out_dir / f"brief_{run_date}.md"
+    paths = {"csv": str(csv_path), "brief": str(md_path)}
 
     cols = [c for c in QUEUE_COLUMNS if c in df.columns]
     df.to_csv(csv_path, columns=cols, index=False)
-    md_path.write_text(_render_brief(df, run_date))
-    return {"csv": str(csv_path), "brief": str(md_path)}
+
+    if visit_plan is not None and len(visit_plan):
+        visits_path = out_dir / f"visits_{run_date}.csv"
+        vcols = [c for c in ["city", "store_name", "stage", "priority", "phone", "email"]
+                 if c in visit_plan.columns]
+        visit_plan.to_csv(visits_path, columns=vcols, index=False)
+        paths["visits"] = str(visits_path)
+
+    md_path.write_text(_render_brief(df, run_date, visit_plan))
+    return paths
 
 
-_CHANNEL_TITLES = {
-    "dm": "Instagram DMs", "email": "Emails", "call": "Calls",
-    "book_visit": "Visits to book", "visit": "Visits",
-}
+_CHANNEL_TITLES = {"dm": "Instagram DMs", "email": "Emails", "call": "Calls"}
 
 
-def _render_brief(df: pd.DataFrame, run_date: str) -> str:
+def _render_brief(df: pd.DataFrame, run_date: str, visit_plan: pd.DataFrame | None = None) -> str:
     lines = [f"# Sally — daily action brief · {run_date}", ""]
     if df.empty:
         lines.append("_No actions due today._")
-        return "\n".join(lines)
-    lines.append(f"**{len(df)} actions today.**  " +
-                 " · ".join(f"{ch}: {n}" for ch, n in df["channel"].value_counts().items()))
-    lines.append("")
-    for ch in ["dm", "email", "call", "book_visit", "visit"]:
-        sub = df[df["channel"] == ch]
-        if sub.empty:
-            continue
-        lines.append(f"## {_CHANNEL_TITLES.get(ch, ch)} ({len(sub)})")
+    else:
+        lines.append(f"**{len(df)} actions today.**  " +
+                     " · ".join(f"{ch}: {n}" for ch, n in df["channel"].value_counts().items()))
         lines.append("")
-        lines.append("| # | Lead | Stage | Contact | Why |")
-        lines.append("|---|---|---|---|---|")
-        for i, (_, r) in enumerate(sub.iterrows(), 1):
-            lines.append(f"| {i} | {r['name']} | {r['stage']} | {r['contact']} | {r['reason']} |")
+        for ch in ["dm", "email", "call"]:
+            sub = df[df["channel"] == ch]
+            if sub.empty:
+                continue
+            lines.append(f"## {_CHANNEL_TITLES.get(ch, ch)} ({len(sub)})")
+            lines.append("")
+            lines.append("| # | Lead | Stage | Contact | Why |")
+            lines.append("|---|---|---|---|---|")
+            for i, (_, r) in enumerate(sub.iterrows(), 1):
+                lines.append(f"| {i} | {r['name']} | {r['stage']} | {r['contact']} | {r['reason']} |")
+            lines.append("")
+
+    # forward-looking visit plan (planning, not a daily action)
+    if visit_plan is not None and len(visit_plan):
+        lines.append(f"## Visit plan — {len(visit_plan)} shops worth a trip, by city")
+        lines.append("")
+        for city, grp in visit_plan.groupby("city", sort=False):
+            names = ", ".join(grp.sort_values("priority", ascending=False)["store_name"].astype(str))
+            lines.append(f"- **{city}** ({len(grp)}): {names}")
         lines.append("")
     return "\n".join(lines)

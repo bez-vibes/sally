@@ -86,7 +86,7 @@ def run(
                             a["reason"], db_path=db)
 
     # 10: write outputs
-    paths = write_queue(actions, out, run_id)
+    paths = write_queue(actions, out, run_id, visit_plan=plan)
 
     _summary(up, r_rep, s_rep, plan, len(cold), actions, paths, run_date)
 
