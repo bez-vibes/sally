@@ -167,12 +167,14 @@ def main() -> None:
     queued_today = sum(counts.values())
 
     chan = st.radio("Channel", ["All", "dm", "email", "call"], horizontal=True, key="chan")
+    if st.session_state.get("_lastchan") != chan:   # restart navigation when the filter changes
+        st.session_state._lastchan = chan
+        st.session_state.nav_i = 0
     filtered = [a for a in pending if chan == "All" or a["channel"] == chan]
 
     # progress reflects the current filter: "All" -> whole queue; a channel -> that channel
     chan_total = queued_today if chan == "All" else counts.get(chan, 0)
-    chan_pending = len(filtered)
-    chan_done = chan_total - chan_pending
+    chan_done = chan_total - len(filtered)
     scope = "" if chan == "All" else f" ({chan})"
 
     st.divider()
@@ -183,9 +185,14 @@ def main() -> None:
         st.info(f"Nothing left in **{chan}** — switch the filter ({len(pending)} still pending elsewhere).")
         return
 
-    a = filtered[0]
+    # navigation position within the (DB-derived) pending list — view only, no DB change
+    nav_i = max(0, min(st.session_state.get("nav_i", 0), len(filtered) - 1))
+    st.session_state.nav_i = nav_i
+    a = filtered[nav_i]
+
     st.progress(chan_done / chan_total if chan_total else 0,
                 text=f"{chan_done} of {chan_total} processed{scope}")
+    st.caption(f"Viewing {nav_i + 1} of {len(filtered)} in the queue")
     icon = {"dm": "📱 Instagram DM", "email": "✉️ Email", "call": "📞 Call"}.get(a["channel"], a["channel"])
     st.caption(f"{icon}  ·  {a.get('stage','')}")
     st.subheader(_display_name(a))
@@ -206,12 +213,18 @@ def main() -> None:
         else:
             st.caption("No history yet.")
 
-    c1, c2, _ = st.columns([1, 1, 3])
-    if c1.button("✅ Done", use_container_width=True):
+    prev_c, done_c, skip_c, next_c = st.columns(4)
+    if prev_c.button("⬅️ Previous", use_container_width=True, disabled=nav_i == 0):
+        st.session_state.nav_i = nav_i - 1
+        st.rerun()
+    if done_c.button("✅ Done", use_container_width=True):
         store.set_action_status(a["action_id"], "done", DB)
         st.rerun()
-    if c2.button("⏭️ Skip", use_container_width=True):
+    if skip_c.button("⏭️ Skip", use_container_width=True):
         store.set_action_status(a["action_id"], "skipped", DB)
+        st.rerun()
+    if next_c.button("Next ➡️", use_container_width=True, disabled=nav_i >= len(filtered) - 1):
+        st.session_state.nav_i = nav_i + 1
         st.rerun()
 
 
