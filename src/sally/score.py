@@ -75,13 +75,35 @@ def _rank(row) -> float:
     return row["value"]
 
 
+def _fmt_spend(v) -> str:
+    if pd.isna(v):
+        return "spend unknown"
+    v = float(v)
+    if v >= 1000:
+        return f"~£{v/1000:.1f}k/mo".replace(".0k", "k")
+    return f"~£{int(v)}/mo"
+
+
 def _reason(row) -> str:
-    bits = [row["group_label"], row["stage"], f"value p{int(row['value']*100)}"]
-    if row["group_order"] in (1, 2) and pd.notna(row["days_since_touch"]):
-        bits.append(f"{int(row['days_since_touch'])}d quiet")
-    if row["group_order"] == 3:
-        bits.append("whale" if row["value"] >= WHALE_VALUE_THRESHOLD else "below-whale")
-    return " · ".join(bits)
+    """Plain-English why-this-lead, for a rep or agent acting on the queue."""
+    spend = _fmt_spend(row.get("est_monthly_spend_gbp"))
+    stage, g = row["stage"], row["group_order"]
+    days = row["days_since_touch"]
+    quiet = f"quiet {int(days)} days" if pd.notna(days) else "not yet contacted"
+
+    if g == 0:  # deals in flight
+        label = "In negotiation" if stage == "Negotiating" else "Call booked"
+        return f"{label}, {spend} — keep the deal moving"
+    if g == 1:  # revive warm
+        if pd.notna(days):
+            return f"{stage} then went {quiet}, {spend} — re-engage before they go cold"
+        return f"{stage}, {spend} — follow up"
+    if g == 2:  # revival
+        return f"Ghosted, {quiet}, {spend} — worth a re-engagement nudge"
+    # cold
+    if row["value"] >= WHALE_VALUE_THRESHOLD:
+        return f"New lead, high spender at {spend} — worth a first touch"
+    return f"New lead, {spend}"
 
 
 def score_resellers(df: pd.DataFrame, dm_cap: int = DM_CAP,

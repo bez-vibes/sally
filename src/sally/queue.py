@@ -13,7 +13,7 @@ import pandas as pd
 
 QUEUE_COLUMNS = [
     "priority", "lead_type", "name", "contact", "channel", "action_type",
-    "stage", "reason", "due_date", "message", "lead_key",
+    "stage", "monthly_spend", "reason", "due_date", "message", "lead_key",
 ]
 
 
@@ -51,6 +51,7 @@ def build_action_rows(resellers: pd.DataFrame, shops: pd.DataFrame, due_date: st
             "action_type": "re_engage" if r["group_order"] in (1, 2) else
                            ("advance_deal" if r["group_order"] == 0 else "outreach"),
             "stage": r["stage"], "reason": r["reason"],
+            "monthly_spend": r.get("est_monthly_spend_gbp"),
             "priority": round(float(r["rank_score"]), 3),
             "dm_rank": r.get("dm_rank"), "due_date": due_date, "message": "",
             "lead_key": r["lead_key"],
@@ -64,6 +65,7 @@ def build_action_rows(resellers: pd.DataFrame, shops: pd.DataFrame, due_date: st
             "phone": s.get("phone"), "city": s.get("city"),
             "channel": s["next_step"], "action_type": s["next_step"],
             "stage": s["stage"], "reason": s.get("step_note", ""),
+            "monthly_spend": s.get("est_monthly_spend_gbp"),
             "priority": round(float(s["priority"]), 3),
             "dm_rank": None, "due_date": due_date, "message": "",
             "lead_key": s["lead_key"],
