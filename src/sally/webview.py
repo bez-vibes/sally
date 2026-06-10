@@ -106,10 +106,15 @@ def main() -> None:
     pending = store.pending_actions(db_path=DB)
     counts = store.action_counts(db_path=DB)
     queued_today = sum(counts.values())
-    processed = queued_today - len(pending)
 
     chan = st.radio("Channel", ["All", "dm", "email", "call"], horizontal=True, key="chan")
     filtered = [a for a in pending if chan == "All" or a["channel"] == chan]
+
+    # progress reflects the current filter: "All" -> whole queue; a channel -> that channel
+    chan_total = queued_today if chan == "All" else counts.get(chan, 0)
+    chan_pending = len(filtered)
+    chan_done = chan_total - chan_pending
+    scope = "" if chan == "All" else f" ({chan})"
 
     st.divider()
     if not pending:
@@ -120,8 +125,8 @@ def main() -> None:
         return
 
     a = filtered[0]
-    st.progress(processed / queued_today if queued_today else 0,
-                text=f"{processed} of {queued_today} processed")
+    st.progress(chan_done / chan_total if chan_total else 0,
+                text=f"{chan_done} of {chan_total} processed{scope}")
     icon = {"dm": "📱 Instagram DM", "email": "✉️ Email", "call": "📞 Call"}.get(a["channel"], a["channel"])
     st.caption(f"{icon}  ·  {a.get('stage','')}")
     st.subheader(_display_name(a))
