@@ -6,7 +6,9 @@ ingest -> clean -> dedupe -> classify -> upsert -> skip cooldown -> score + sequ
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pandas as pd
 
@@ -39,9 +41,10 @@ def run_pipeline(file: str, sheet: str | None = None, db: str = store.DEFAULT_DB
     run_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     raw = load_batch(file, sheet=sheet)
-    cleaned, _ = clean(raw)
-    deduped, _ = dedupe(cleaned)
-    classified, _ = classify(deduped)
+    stage_labels_in = int(raw["stage"].dropna().nunique())
+    cleaned, clean_rep = clean(raw)
+    deduped, dd_rep = dedupe(cleaned)
+    classified, cls_rep = classify(deduped)
     up = store.upsert_leads(classified, run_id, file=file,
                             batch=str(raw["_batch"].iloc[0]), db_path=db)
 
@@ -57,15 +60,48 @@ def run_pipeline(file: str, sheet: str | None = None, db: str = store.DEFAULT_DB
 
     actions = build_action_rows(resellers, shops, due_date=run_date)
     actions = draft_all(actions)
+
+    def _num(v):
+        return None if pd.isna(v) else float(v)
+
     for _, a in actions.iterrows():
         store.record_action(a["lead_key"], run_id, a["channel"], a["action_type"],
                             a["due_date"], a.get("message", ""), float(a["priority"]),
-                            a["reason"], db_path=db)
+                            a["reason"], db_path=db, group_label=a.get("group_label"),
+                            value=_num(a.get("value")), urgency=_num(a.get("urgency")),
+                            days_quiet=_num(a.get("days_quiet")))
 
     store.update_run_stats(run_id, len(actions), len(cold), db_path=db)
 
     paths = write_queue(actions, out, run_id, visit_plan=plan)
     ch = actions["channel"].value_counts().to_dict() if len(actions) else {}
+
+    # run trace — the funnel, for the UI's "under the hood" panel
+    methods = actions["draft_method"].value_counts().to_dict() if "draft_method" in actions else {}
+    trace = {
+        "run_id": run_id, "run_date": run_date, "batch": str(raw["_batch"].iloc[0]),
+        "ingested_rows": len(raw),
+        "clean": {"stage_labels_in": stage_labels_in, "canonical_stages": 9,
+                  "unmapped_stages": len(clean_rep["unmapped_stages"]),
+                  "emails_repaired": clean_rep["emails_repaired"],
+                  "phones_flagged": clean_rep["phones_uncertain"]},
+        "dedupe": {"rows_in": dd_rep["rows_in"], "rows_out": dd_rep["rows_out"],
+                   "duplicates_removed": dd_rep["duplicates_removed"],
+                   "groups_merged": dd_rep["groups_merged"]},
+        "classify": {"resellers": cls_rep["by_type"].get("reseller", 0),
+                     "shops": cls_rep["by_type"].get("shop", 0),
+                     "reseller_has_email": cls_rep["reseller_has_email"]},
+        "store": {"new": up["new"], "updated": up["updated"],
+                  "stage_advanced": up["stage_advanced"], "replies": up["replies"],
+                  "leads_total": up["leads_total"]},
+        "cooldown_skipped": len(cold),
+        "score": {"dm": r_rep["dm_today"], "email": r_rep["email_today"],
+                  "deferred": r_rep["deferred"], "dm_by_group": r_rep["dm_by_group"]},
+        "shops": {"active": s_rep["shops_active"], "visit_ready": s_rep["visit_ready"]},
+        "actions_total": len(actions), "draft_methods": methods,
+    }
+    Path(out).mkdir(parents=True, exist_ok=True)
+    (Path(out) / f"trace_{run_id}.json").write_text(json.dumps(trace, indent=2))
     digest = send_digest({
         "actions_total": len(actions), "dm": ch.get("dm", 0),
         "email": ch.get("email", 0), "call": ch.get("call", 0),
@@ -75,4 +111,4 @@ def run_pipeline(file: str, sheet: str | None = None, db: str = store.DEFAULT_DB
 
     return {"run_id": run_id, "run_date": run_date, "upsert": up,
             "reseller_report": r_rep, "shop_report": s_rep, "cooldown_count": len(cold),
-            "actions_total": len(actions), "paths": paths, "digest": digest}
+            "actions_total": len(actions), "paths": paths, "digest": digest, "trace": trace}

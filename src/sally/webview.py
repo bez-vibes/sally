@@ -14,8 +14,8 @@ and posts the Slack digest. Run with: `make web` (or
 from __future__ import annotations
 
 import glob
+import json
 import os
-from collections import Counter
 from datetime import datetime, timezone
 
 import streamlit as st
@@ -96,11 +96,65 @@ def _stats_header():
     )
 
 
+def _latest_trace() -> dict | None:
+    files = sorted(glob.glob(os.path.join(os.path.dirname(DB) or ".", "trace_*.json")))
+    if not files:
+        return None
+    try:
+        return json.loads(open(files[-1]).read())
+    except Exception:
+        return None
+
+
+def _under_the_hood():
+    t = _latest_trace()
+    if not t:
+        return
+    c, d, cl, sc, up = t["clean"], t["dedupe"], t["classify"], t["score"], t["store"]
+    by_group = ", ".join(f"{n} {k.lower()}" for k, n in sc["dm_by_group"].items()) or "—"
+    methods = ", ".join(f"{n} {k}" for k, n in t["draft_methods"].items()) or "—"
+    with st.expander(f"⚙️ Under the hood — what the last run did (batch: {t['batch']})", expanded=True):
+        st.markdown(
+            f"- **Ingested** {t['ingested_rows']} rows\n"
+            f"- **Cleaned** {c['stage_labels_in']} stage spellings → {c['canonical_stages']} canonical · "
+            f"{c['emails_repaired']} emails repaired · {c['phones_flagged']} phones flagged\n"
+            f"- **Deduped** {d['rows_in']} → {d['rows_out']} ({d['duplicates_removed']} duplicates merged across {d['groups_merged']} groups)\n"
+            f"- **Classified** {cl['resellers']} resellers / {cl['shops']} shops "
+            f"({cl['reseller_has_email']} resellers reachable off the DM cap by email)\n"
+            f"- **Store** {up['new']} new · {up['updated']} updated · {up['stage_advanced']} advanced · "
+            f"{up['replies']} new replies → {up['leads_total']} total leads\n"
+            f"- **Skipped** {t['cooldown_skipped']} already-handled (cooldown)\n"
+            f"- **Scored** {sc['dm']} DM ({by_group}) · {sc['email']} email · {sc['deferred']} deferred\n"
+            f"- **Drafted** {t['actions_total']} messages ({methods})"
+        )
+
+
+def _explain(a: dict) -> str:
+    line = f"**Triage:** {a.get('group_label') or '—'}"
+    if a.get("priority_score") is not None:
+        line += f" · priority {a['priority_score']:.2f}"
+    if a.get("value") is not None:
+        line += f" · value p{int(a['value'] * 100)}"
+    if a.get("urgency") is not None:
+        line += f" · urgency {a['urgency']:.2f}"
+    if a.get("days_quiet") is not None:
+        line += f" · {int(a['days_quiet'])}d quiet"
+    bits = [line]
+    if (a.get("merged_count") or 1) > 1:
+        bits.append(f"**Identity:** merged from {a['merged_count']} records "
+                    f"({a.get('merged_lead_ids')}); stages seen: {a.get('merged_stages')}")
+    else:
+        bits.append("**Identity:** single record (no duplicates)")
+    bits.append(f"**Channels available:** {a.get('available_channels') or '—'}")
+    return "\n\n".join(bits)
+
+
 def main() -> None:
     st.set_page_config(page_title="Sally — daily queue", page_icon="✉️", layout="centered")
     st.title("✉️ Sally — today's queue")
     _sidebar()
     _stats_header()
+    _under_the_hood()
 
     # always read the DB — the current lead is the highest-priority still-pending action
     pending = store.pending_actions(db_path=DB)
@@ -136,7 +190,10 @@ def main() -> None:
     label = "Call note" if a["channel"] == "call" else "Message"
     st.text_area(label, value=a.get("message_draft") or "", height=160, key=f"msg_{a['action_id']}")
 
-    with st.expander("Lead history"):
+    with st.expander("🔍 Why this lead"):
+        st.markdown(_explain(a))
+
+    with st.expander("🕓 Lead history"):
         evs = store.lead_events(a["lead_key"], DB)
         if evs:
             for e in evs:

@@ -41,6 +41,7 @@ _LEAD_FIELDS = [
     "followers", "active_listings", "avg_listing_price_gbp", "sales_velocity_30d",
     "est_monthly_spend_gbp", "stage", "num_touches", "first_seen_date",
     "last_touch_date", "last_inbound_text", "assigned_bdr", "notes", "channel",
+    "lead_type", "available_channels", "reseller_has_email",
     "alt_emails", "alt_phones", "alt_handles", "merged_sources", "merged_batches",
     "merged_stages", "merge_conflict", "merged_notes", "alt_inbound_texts",
     "merged_lead_ids", "merged_count",
@@ -74,6 +75,7 @@ def init_db(db_path: str | Path = DEFAULT_DB) -> None:
                 stage TEXT, num_touches REAL,
                 first_seen_date TEXT, last_touch_date TEXT,
                 last_inbound_text TEXT, assigned_bdr TEXT, notes TEXT, channel TEXT,
+                lead_type TEXT, available_channels TEXT, reseller_has_email INTEGER,
                 alt_emails TEXT, alt_phones TEXT, alt_handles TEXT,
                 merged_sources TEXT, merged_batches TEXT, merged_stages TEXT,
                 merge_conflict INTEGER, merged_notes TEXT, alt_inbound_texts TEXT,
@@ -102,7 +104,9 @@ def init_db(db_path: str | Path = DEFAULT_DB) -> None:
                 channel TEXT, action_type TEXT, due_date TEXT,
                 message_draft TEXT,
                 status TEXT DEFAULT 'drafted',  -- drafted | approved | sent | skipped | done
-                priority_score REAL, reason TEXT
+                priority_score REAL, reason TEXT,
+                -- score breakdown, persisted so the UI can explain each lead
+                group_label TEXT, value REAL, urgency REAL, days_quiet REAL
             );
 
             CREATE TABLE IF NOT EXISTS runs (
@@ -220,15 +224,18 @@ def load_leads(db_path: str | Path = DEFAULT_DB) -> pd.DataFrame:
 
 def record_action(lead_key: str, run_id: str, channel: str, action_type: str,
                   due_date: str | None, message_draft: str, priority_score: float,
-                  reason: str, db_path: str | Path = DEFAULT_DB) -> None:
+                  reason: str, db_path: str | Path = DEFAULT_DB,
+                  group_label: str | None = None, value: float | None = None,
+                  urgency: float | None = None, days_quiet: float | None = None) -> None:
     """Append a recommended action and refresh the lead's action cache."""
     now = _now()
     with _conn(db_path) as c:
         c.execute(
             "INSERT INTO actions (lead_key, run_id, at, channel, action_type, due_date, "
-            "message_draft, status, priority_score, reason) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "message_draft, status, priority_score, reason, group_label, value, urgency, "
+            "days_quiet) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (lead_key, run_id, now, channel, action_type, due_date, message_draft,
-             "drafted", priority_score, reason),
+             "drafted", priority_score, reason, group_label, value, urgency, days_quiet),
         )
         c.execute(
             "UPDATE leads SET sally_last_action = ?, last_action_at = ?, "
@@ -280,8 +287,11 @@ def pending_actions(run_id: str | None = None, db_path: str | Path = DEFAULT_DB)
             """
             SELECT a.id AS action_id, a.lead_key, a.channel, a.action_type,
                    a.message_draft, a.reason, a.priority_score, a.status,
+                   a.group_label, a.value, a.urgency, a.days_quiet,
                    l.store_name, l.handle_norm, l.contact_name, l.stage, l.city,
-                   l.email, l.phone, l.last_inbound_text, l.est_monthly_spend_gbp
+                   l.email, l.phone, l.last_inbound_text, l.est_monthly_spend_gbp,
+                   l.merged_lead_ids, l.merged_stages, l.merge_conflict, l.merged_count,
+                   l.available_channels
             FROM actions a JOIN leads l ON l.lead_key = a.lead_key
             WHERE a.run_id = ? AND a.status = 'drafted'
             ORDER BY a.priority_score DESC
