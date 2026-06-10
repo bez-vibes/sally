@@ -8,9 +8,13 @@ install:
 
 # run the full morning routine against FILE and write today's action queue
 run:
-	python -m sally run --file $(FILE)
+	python -m sally run --file $(FILE) --sheet pipeline
 
-# ingest a new batch (e.g. day-2 drop) without re-messaging anyone
+# drop the day-2 batch in — adds new leads, skips already-handled ones
+day2:
+	python -m sally run --file $(FILE) --sheet new_drop_day2
+
+# ingest an arbitrary new batch (separate file)
 ingest:
 	python -m sally run --file $(FILE)
 

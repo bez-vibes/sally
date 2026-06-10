@@ -9,19 +9,31 @@ Built for Fleek's GTM Acquisition team: a B2B marketplace for secondhand and vin
 clothing selling to two very different leads — **online resellers** (Instagram-only,
 40 DMs/day cap) and **physical shops** (email, phone, visitable).
 
-> Status: **Phase 1 — core engine** (in progress). See build phases below.
+> Status: **Phase 1 — core engine** complete and runs end-to-end. See build phases below.
 
 ## Quickstart
 
 ```bash
 pip install -e .
-make run                      # run the morning routine on the sample pipeline
-make ingest FILE=new.xlsx     # drop a new batch in — Sally skips anyone already handled
+
+# day 1: run the morning routine on the main pipeline
+python -m sally run --sheet pipeline
+
+# day 2: drop the new batch in — new leads are added, already-handled leads are
+# skipped (cooldown), and the queue updates. Nobody is messaged twice.
+python -m sally run --sheet new_drop_day2
 ```
 
-No API keys required to run: drafting falls back to deterministic templates and
-enrichment is skipped. Add keys in `.env` (see `.env.example`) to turn on
-LLM-drafted re-engagement messages, enrichment, and the Slack digest.
+Outputs land in `data/out/`: `actions_<run>.csv` (machine-readable) and
+`brief_<run>.md` (a channel-grouped morning brief). State persists in
+`data/out/sally.db`.
+
+No API keys required to run. Add keys in `.env` (see `.env.example`) to turn on
+LLM-drafted messages, enrichment, and the Slack digest.
+
+```bash
+make test    # core guarantees: cleaning, dedup (rule A), run idempotency
+```
 
 ## What it does
 
