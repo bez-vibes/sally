@@ -94,6 +94,16 @@ def test_drafting_keyless_falls_back_to_templates(monkeypatch):
     assert msg.startswith("Call Old Rail")
 
 
+def test_slack_digest_keyless_previews_local_path(monkeypatch):
+    from sally.notify import send_digest
+    monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+    r = send_digest({"actions_total": 5, "dm": 3, "email": 2, "call": 0,
+                     "top_visit_cities": {}, "new": 5, "updated": 0, "cooldown": 0},
+                    "data/out/brief_x.md", "2026-06-10")
+    assert r["sent"] is False and r["reason"] == "no SLACK_WEBHOOK_URL"
+    assert "data/out/brief_x.md" in r["preview"] and "5 actions today" in r["preview"]
+
+
 def test_rerun_is_idempotent(tmp_path):
     db = str(tmp_path / "t.db")
     df = _frame([

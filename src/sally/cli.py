@@ -23,6 +23,7 @@ from .clean import clean
 from .draft import draft_all
 from .identity import dedupe
 from .ingest import load_batch
+from .notify import send_digest
 from .queue import build_action_rows, write_queue
 from .score import as_of_date, score_resellers
 from .sequence import sequence_shops
@@ -87,13 +88,20 @@ def run(
                             a["due_date"], a.get("message", ""), float(a["priority"]),
                             a["reason"], db_path=db)
 
-    # 10: write outputs
+    # 10: write outputs + post the Slack digest (or preview it if no webhook)
     paths = write_queue(actions, out, run_id, visit_plan=plan)
+    ch = actions["channel"].value_counts().to_dict() if len(actions) else {}
+    digest = send_digest({
+        "actions_total": len(actions), "dm": ch.get("dm", 0),
+        "email": ch.get("email", 0), "call": ch.get("call", 0),
+        "top_visit_cities": s_rep["top_visit_cities"], "new": up["new"],
+        "updated": up["updated"], "cooldown": len(cold),
+    }, paths["brief"], run_date)
 
-    _summary(up, r_rep, s_rep, plan, len(cold), actions, paths, run_date)
+    _summary(up, r_rep, s_rep, plan, len(cold), actions, paths, run_date, digest)
 
 
-def _summary(up, r_rep, s_rep, plan, n_cold, actions, paths, run_date):
+def _summary(up, r_rep, s_rep, plan, n_cold, actions, paths, run_date, digest=None):
     t = Table(title=f"Sally run · {run_date}", show_header=False)
     t.add_row("Store", f"{up['leads_total']} leads ({up['new']} new, {up['updated']} updated, "
                        f"{up['stage_advanced']} advanced, {up['replies']} new replies)")
@@ -105,6 +113,9 @@ def _summary(up, r_rep, s_rep, plan, n_cold, actions, paths, run_date):
     t.add_row("  Top visit cities", str(s_rep["top_visit_cities"]))
     t.add_row("Actions queued today", str(len(actions)))
     t.add_row("Queue files", f"{paths['csv']}\n{paths['brief']}")
+    if digest:
+        status = "sent ✓" if digest.get("sent") else f"preview only ({digest.get('reason')})"
+        t.add_row(f"Slack digest [{status}]", digest.get("preview", ""))
     console.print(t)
 
 

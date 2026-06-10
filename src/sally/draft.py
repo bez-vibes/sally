@@ -22,6 +22,19 @@ COMPANY = os.getenv("SALLY_COMPANY", "Fleek")
 REP = os.getenv("SALLY_REP_NAME", "the Fleek team")
 CACHE_PATH = Path(os.getenv("SALLY_DRAFT_CACHE", ".cache/drafts.json"))
 
+# ---------------------------------------------------------------------------
+# TWEAK THE VOICE HERE. This system prompt steers every LLM-drafted message;
+# the _t_* functions below are the deterministic templates (the keyless default).
+# Editing either changes Sally's messaging without touching the pipeline.
+# ---------------------------------------------------------------------------
+LLM_SYSTEM_PROMPT = (
+    f"You are an SDR for {COMPANY}, a B2B marketplace where resellers and vintage "
+    f"shops source secondhand/vintage clothing wholesale, in bulk, with buyer "
+    f"protection and global logistics. You write short, warm, specific re-engagement "
+    f"messages. British English. No em dashes. No emoji spam. Do not invent facts. "
+    f"Reply directly to what the lead last said."
+)
+
 
 # --- small helpers --------------------------------------------------------------
 
@@ -129,18 +142,12 @@ def _llm_complete(system: str, user: str) -> str | None:
 def _reengage_prompt(row) -> tuple[str, str]:
     channel = "Instagram DM" if row.get("channel") == "dm" else "email"
     limit = "under 55 words, casual, lowercase is fine" if channel == "Instagram DM" else "under 120 words"
-    system = (
-        f"You are an SDR for {COMPANY}, a B2B marketplace where resellers and vintage "
-        f"shops source secondhand/vintage clothing wholesale, in bulk, with buyer "
-        f"protection and global logistics. You write short, warm, specific "
-        f"re-engagement messages. British English. No em dashes. No emoji spam. "
-        f"Do not invent facts. Reply directly to what they last said.")
     user = (
         f"Channel: {channel} ({limit}).\n"
         f"Lead: {_first_name(row)} ({row.get('stage')}).\n"
         f"They last said: \"{row.get('last_inbound_text')}\".\n"
         f"Write the next message to re-open the conversation and move toward a call/order.")
-    return system, user
+    return LLM_SYSTEM_PROMPT, user
 
 
 # --- cache + public API ---------------------------------------------------------

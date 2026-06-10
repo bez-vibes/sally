@@ -31,6 +31,11 @@ Outputs land in `data/out/`: `actions_<run>.csv` (machine-readable) and
 No API keys required to run. Add keys in `.env` (see `.env.example`) to turn on
 LLM-drafted messages, enrichment, and the Slack digest.
 
+**Tweaking the messaging:** the message voice lives in `src/sally/draft.py` —
+`LLM_SYSTEM_PROMPT` steers LLM-drafted re-engagements, and the `_t_*` functions
+are the deterministic templates used by default (and as the keyless fallback).
+Edit either to change Sally's voice without touching the pipeline.
+
 ```bash
 make test    # core guarantees: cleaning, dedup (rule A), run idempotency
 ```
