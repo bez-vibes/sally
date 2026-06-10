@@ -14,8 +14,11 @@ from pathlib import Path
 
 import pandas as pd
 import typer
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
+
+load_dotenv()  # pick up SLACK_WEBHOOK_URL / GEMINI_API_KEY etc. from .env
 
 from . import store
 from .classify import classify

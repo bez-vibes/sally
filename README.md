@@ -9,7 +9,8 @@ Built for Fleek's GTM Acquisition team: a B2B marketplace for secondhand and vin
 clothing selling to two very different leads — **online resellers** (Instagram-only,
 40 DMs/day cap) and **physical shops** (email, phone, visitable).
 
-> Status: **Phase 1 — core engine** complete and runs end-to-end. See build phases below.
+> Status: core engine, drafting, focused UI, Slack digest and a scheduled run all
+> working end-to-end. See build phases below.
 
 ## Quickstart
 
@@ -39,6 +40,22 @@ Edit either to change Sally's voice without touching the pipeline.
 ```bash
 make test    # core guarantees: cleaning, dedup (rule A), run idempotency
 ```
+
+## Process the queue (the UI)
+
+There's no file to open — the queue is worked through a small local web app:
+
+```bash
+make web      # then open http://localhost:8501 in your browser
+```
+
+It shows one lead at a time (who, why, and the drafted message) with two buttons:
+
+- **Done** — mark it handled (enters cooldown, won't resurface)
+- **Skip** — move on without sending (resurfaces in a future run)
+
+Both write straight to `data/out/sally.db`. (First time only: `pip install -e ".[web]"`
+to pull in Streamlit.)
 
 ## What it does
 
