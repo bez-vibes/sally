@@ -44,7 +44,7 @@ def build_action_rows(resellers: pd.DataFrame, shops: pd.DataFrame, due_date: st
     rdo = resellers[resellers["action_channel"].isin(["dm", "email"])]
     for _, r in rdo.iterrows():
         rows.append({
-            "lead_type": "reseller", "name": _name(r),
+            "lead_type": "reseller", "name": _name(r), "contact_name": r.get("contact_name"),
             "handle_norm": r.get("handle_norm"), "email": r.get("email"),
             "phone": r.get("phone"), "city": r.get("city"),
             "channel": r["action_channel"],
@@ -52,6 +52,7 @@ def build_action_rows(resellers: pd.DataFrame, shops: pd.DataFrame, due_date: st
                            ("advance_deal" if r["group_order"] == 0 else "outreach"),
             "stage": r["stage"], "reason": r["reason"],
             "monthly_spend": r.get("est_monthly_spend_gbp"),
+            "last_inbound_text": r.get("last_inbound_text"),
             "priority": round(float(r["rank_score"]), 3),
             "dm_rank": r.get("dm_rank"), "due_date": due_date, "message": "",
             "lead_key": r["lead_key"],
@@ -60,12 +61,13 @@ def build_action_rows(resellers: pd.DataFrame, shops: pd.DataFrame, due_date: st
     sdo = shops[shops["next_step"].isin(["email", "call"])]
     for _, s in sdo.iterrows():
         rows.append({
-            "lead_type": "shop", "name": _name(s),
+            "lead_type": "shop", "name": _name(s), "contact_name": s.get("contact_name"),
             "handle_norm": s.get("handle_norm"), "email": s.get("email"),
             "phone": s.get("phone"), "city": s.get("city"),
             "channel": s["next_step"], "action_type": s["next_step"],
             "stage": s["stage"], "reason": s.get("step_note", ""),
             "monthly_spend": s.get("est_monthly_spend_gbp"),
+            "last_inbound_text": s.get("last_inbound_text"),
             "priority": round(float(s["priority"]), 3),
             "dm_rank": None, "due_date": due_date, "message": "",
             "lead_key": s["lead_key"],

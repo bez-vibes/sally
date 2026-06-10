@@ -72,6 +72,28 @@ def test_classify_channel_by_data_not_label():
     assert bool(c.loc[c.lead_id == "3", "reseller_has_email"].iloc[0]) is True
 
 
+def test_drafting_keyless_falls_back_to_templates(monkeypatch):
+    from sally import draft
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    cold = {"name": "vintagejo", "channel": "dm", "action_type": "outreach",
+            "stage": "New", "last_inbound_text": None}
+    msg, how = draft.draft_for(cold, cache={})
+    assert how == "template" and "Fleek" in msg
+
+    reengage = {"name": "vintagejo", "channel": "dm", "action_type": "re_engage",
+                "stage": "Warm", "last_inbound_text": "what brands do you take?"}
+    msg, how = draft.draft_for(reengage, cache={})
+    assert how == "template" and "circling back" in msg  # LLM unavailable -> template
+
+    call = {"name": "Old Rail", "channel": "call", "action_type": "call",
+            "stage": "Warm", "reason": "warm — call to book a visit", "monthly_spend": 5000}
+    msg, how = draft.draft_for(call, cache={})
+    assert msg.startswith("Call Old Rail")
+
+
 def test_rerun_is_idempotent(tmp_path):
     db = str(tmp_path / "t.db")
     df = _frame([

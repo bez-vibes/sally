@@ -20,6 +20,7 @@ from rich.table import Table
 from . import store
 from .classify import classify
 from .clean import clean
+from .draft import draft_all
 from .identity import dedupe
 from .ingest import load_batch
 from .queue import build_action_rows, write_queue
@@ -78,8 +79,9 @@ def run(
     resellers, r_rep = score_resellers(eligible, dm_cap=dm_cap, as_of=as_of)
     shops, plan, s_rep = sequence_shops(eligible, as_of=as_of)
 
-    # 8-9: assemble today's queue + record the actions so re-runs skip them
+    # 8-9: assemble today's queue, draft each message, record actions so re-runs skip them
     actions = build_action_rows(resellers, shops, due_date=run_date)
+    actions = draft_all(actions)
     for _, a in actions.iterrows():
         store.record_action(a["lead_key"], run_id, a["channel"], a["action_type"],
                             a["due_date"], a.get("message", ""), float(a["priority"]),
