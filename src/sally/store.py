@@ -246,3 +246,33 @@ def has_pending_action(lead_key: str, db_path: str | Path = DEFAULT_DB) -> bool:
             "('drafted','approved','sent')", (lead_key,)
         ).fetchone()[0]
     return n > 0
+
+
+def leads_in_cooldown(cooldown_days: int = 4, db_path: str | Path = DEFAULT_DB) -> set[str]:
+    """Lead keys that were actioned within `cooldown_days` and have NOT replied or
+    advanced since — i.e. already handled, don't re-surface them today. A reply or
+    stage change after the last action releases the lead immediately.
+
+    This is what stops a re-run re-messaging the same people: yesterday's 40 sit in
+    cooldown, so today's slots go to the next-best leads.
+    """
+    now = datetime.now(timezone.utc)
+    in_cd: set[str] = set()
+    with _conn(db_path) as c:
+        rows = c.execute(
+            "SELECT lead_key, MAX(at) AS last_at FROM actions "
+            "WHERE status IN ('drafted','approved','sent') GROUP BY lead_key"
+        ).fetchall()
+        for r in rows:
+            last_at = datetime.fromisoformat(r["last_at"])
+            if (now - last_at).days >= cooldown_days:
+                continue  # cooled down — eligible again
+            changed = c.execute(
+                "SELECT COUNT(*) FROM events WHERE lead_key = ? AND "
+                "type IN ('reply_received','stage_change') AND at > ?",
+                (r["lead_key"], r["last_at"]),
+            ).fetchone()[0]
+            if changed:
+                continue  # replied/advanced since — re-surface
+            in_cd.add(r["lead_key"])
+    return in_cd
