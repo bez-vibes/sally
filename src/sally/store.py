@@ -248,6 +248,41 @@ def has_pending_action(lead_key: str, db_path: str | Path = DEFAULT_DB) -> bool:
     return n > 0
 
 
+def latest_run_id(db_path: str | Path = DEFAULT_DB) -> str | None:
+    with _conn(db_path) as c:
+        row = c.execute("SELECT run_id FROM runs ORDER BY at DESC LIMIT 1").fetchone()
+    return row["run_id"] if row else None
+
+
+def pending_actions(run_id: str | None = None, db_path: str | Path = DEFAULT_DB) -> list[dict]:
+    """The queue to work through: drafted (not yet done/skipped) actions for a run
+    (latest run if none given), joined to their lead, highest priority first."""
+    init_db(db_path)
+    with _conn(db_path) as c:
+        run_id = run_id or latest_run_id(db_path)
+        if not run_id:
+            return []
+        rows = c.execute(
+            """
+            SELECT a.id AS action_id, a.lead_key, a.channel, a.action_type,
+                   a.message_draft, a.reason, a.priority_score, a.status,
+                   l.store_name, l.handle_norm, l.contact_name, l.stage, l.city,
+                   l.email, l.phone, l.last_inbound_text, l.est_monthly_spend_gbp
+            FROM actions a JOIN leads l ON l.lead_key = a.lead_key
+            WHERE a.run_id = ? AND a.status = 'drafted'
+            ORDER BY a.priority_score DESC
+            """,
+            (run_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def set_action_status(action_id: int, status: str, db_path: str | Path = DEFAULT_DB) -> None:
+    """Mark an action done/sent/skipped from the UI."""
+    with _conn(db_path) as c:
+        c.execute("UPDATE actions SET status = ? WHERE id = ?", (status, action_id))
+
+
 def leads_in_cooldown(cooldown_days: int = 4, db_path: str | Path = DEFAULT_DB) -> set[str]:
     """Lead keys that were actioned within `cooldown_days` and have NOT replied or
     advanced since — i.e. already handled, don't re-surface them today. A reply or
@@ -259,9 +294,10 @@ def leads_in_cooldown(cooldown_days: int = 4, db_path: str | Path = DEFAULT_DB) 
     now = datetime.now(timezone.utc)
     in_cd: set[str] = set()
     with _conn(db_path) as c:
+        # drafted/sent/done cool the lead; 'skipped' does NOT (a skip resurfaces it)
         rows = c.execute(
             "SELECT lead_key, MAX(at) AS last_at FROM actions "
-            "WHERE status IN ('drafted','approved','sent') GROUP BY lead_key"
+            "WHERE status IN ('drafted','approved','sent','done') GROUP BY lead_key"
         ).fetchall()
         for r in rows:
             last_at = datetime.fromisoformat(r["last_at"])

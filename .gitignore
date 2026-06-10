@@ -24,3 +24,4 @@ data/out/*
 
 # os
 .DS_Store
+.claude/

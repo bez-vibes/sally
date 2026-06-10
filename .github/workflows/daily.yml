@@ -1,0 +1,45 @@
+name: Sally daily run
+
+# Runs the morning routine on a schedule and on demand. Persists the SQLite state
+# and the day's queue back to the repo so memory carries across runs (the
+# MVP approach to state on an ephemeral runner; production would use hosted Postgres).
+
+on:
+  schedule:
+    - cron: "0 7 * * 1-5"   # 07:00 UTC, weekdays
+  workflow_dispatch:        # manual "Run workflow" button
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Run Sally
+        env:
+          # optional — the run works without them (templates + preview digest)
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: python -m sally run --sheet pipeline
+
+      - name: Persist state + queue
+        run: |
+          git config user.name "sally-bot"
+          git config user.email "sally-bot@users.noreply.github.com"
+          git add -f data/out/sally.db data/out/brief_*.md data/out/actions_*.csv data/out/visits_*.csv
+          if git diff --cached --quiet; then
+            echo "no changes to commit"
+          else
+            git commit -m "chore: daily run $(date -u +%Y-%m-%d)"
+            git push
+          fi

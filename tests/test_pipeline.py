@@ -104,6 +104,33 @@ def test_slack_digest_keyless_previews_local_path(monkeypatch):
     assert "data/out/brief_x.md" in r["preview"] and "5 actions today" in r["preview"]
 
 
+def test_focused_queue_done_cools_skip_resurfaces(tmp_path):
+    db = str(tmp_path / "q.db")
+    df = _frame([
+        {"lead_id": "1", "handle": "x", "stage": "Replied", "est_monthly_spend_gbp": 5000,
+         "last_touch_date": "2026-02-01"},
+        {"lead_id": "2", "handle": "y", "stage": "Warm", "est_monthly_spend_gbp": 6000,
+         "last_touch_date": "2026-02-02"},
+    ])
+    c, _ = clean(df); out, _ = dedupe(c); out, _ = classify(out)
+    store.upsert_leads(out, "run1", db_path=db)
+    store.record_action("h:x", "run1", "dm", "re_engage", "2026-02-03", "hi x", 0.9, "why x", db_path=db)
+    store.record_action("h:y", "run1", "dm", "re_engage", "2026-02-03", "hi y", 0.8, "why y", db_path=db)
+
+    q = store.pending_actions("run1", db)
+    assert len(q) == 2 and q[0]["message_draft"] == "hi x"  # priority ordered
+
+    done_id = [a["action_id"] for a in q if a["lead_key"] == "h:x"][0]
+    skip_id = [a["action_id"] for a in q if a["lead_key"] == "h:y"][0]
+    store.set_action_status(done_id, "done", db)
+    store.set_action_status(skip_id, "skipped", db)
+
+    cold = store.leads_in_cooldown(4, db)
+    assert "h:x" in cold        # done -> cooled, won't resurface
+    assert "h:y" not in cold    # skipped -> resurfaces next run
+    assert store.pending_actions("run1", db) == []  # both cleared from today's queue
+
+
 def test_rerun_is_idempotent(tmp_path):
     db = str(tmp_path / "t.db")
     df = _frame([
