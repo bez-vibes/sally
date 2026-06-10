@@ -65,9 +65,14 @@ def _sidebar():
         n = store.reset_actions_to_drafted(db_path=DB)
         st.sidebar.success(f"Reset {n} actions"); st.rerun()
     if st.sidebar.button("🧨 Hard reset (wipe DB)", use_container_width=True):
-        if os.path.exists(DB):
-            os.remove(DB)
-        st.sidebar.warning("DB wiped — run Day 1 to rebuild"); st.rerun()
+        out_dir = os.path.dirname(DB) or "."
+        for f in [DB, *glob.glob(os.path.join(out_dir, "trace_*.json")),
+                  *glob.glob(os.path.join(out_dir, "actions_*.csv")),
+                  *glob.glob(os.path.join(out_dir, "brief_*.md")),
+                  *glob.glob(os.path.join(out_dir, "visits_*.csv"))]:
+            if os.path.exists(f):
+                os.remove(f)
+        st.sidebar.warning("Wiped — run Day 1 to rebuild"); st.rerun()
 
     st.sidebar.divider()
     if st.sidebar.button("📤 Post Slack digest", use_container_width=True):
