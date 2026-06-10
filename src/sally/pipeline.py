@@ -62,6 +62,8 @@ def run_pipeline(file: str, sheet: str | None = None, db: str = store.DEFAULT_DB
                             a["due_date"], a.get("message", ""), float(a["priority"]),
                             a["reason"], db_path=db)
 
+    store.update_run_stats(run_id, len(actions), len(cold), db_path=db)
+
     paths = write_queue(actions, out, run_id, visit_plan=plan)
     ch = actions["channel"].value_counts().to_dict() if len(actions) else {}
     digest = send_digest({

@@ -85,15 +85,21 @@ def _sidebar():
 def _stats_header():
     rc = store.run_counts(DB)
     counts = store.action_counts(db_path=DB)
-    pending = len(store.pending_actions(db_path=DB))
     last = rc["last_run"] or {}
+    remaining = len(store.pending_actions(db_path=DB))
+    queued = last.get("actions_total") or sum(counts.values())
+    skipped = last.get("skipped_cooldown") or 0
+
     cols = st.columns(4)
     cols[0].metric("Leads in store", rc["leads_total"])
-    cols[1].metric("Queue remaining", pending)
-    cols[2].metric("DM / email / call",
-                   f"{counts.get('dm',0)}/{counts.get('email',0)}/{counts.get('call',0)}")
-    cols[3].metric("New / cooldown",
-                   f"{last.get('new_leads',0)} / {len(store.leads_in_cooldown(4, DB))}")
+    cols[1].metric("Queued today", queued)
+    cols[2].metric("Remaining", remaining)
+    cols[3].metric("Skipped (already handled)", skipped)
+    st.caption(
+        f"Latest run: {last.get('new_leads',0)} new · {last.get('updated_leads',0)} updated  |  "
+        f"queued by channel — DM {counts.get('dm',0)} · email {counts.get('email',0)} "
+        f"· call {counts.get('call',0)}"
+    )
 
 
 def main() -> None:

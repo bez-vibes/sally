@@ -108,7 +108,8 @@ def init_db(db_path: str | Path = DEFAULT_DB) -> None:
             CREATE TABLE IF NOT EXISTS runs (
                 run_id TEXT PRIMARY KEY, at TEXT, file TEXT, batch TEXT,
                 rows_in INTEGER, leads_total INTEGER,
-                new_leads INTEGER, updated_leads INTEGER, stage_advanced INTEGER
+                new_leads INTEGER, updated_leads INTEGER, stage_advanced INTEGER,
+                actions_total INTEGER, skipped_cooldown INTEGER
             );
 
             CREATE INDEX IF NOT EXISTS idx_events_lead ON events(lead_key);
@@ -246,6 +247,19 @@ def has_pending_action(lead_key: str, db_path: str | Path = DEFAULT_DB) -> bool:
             "('drafted','approved','sent')", (lead_key,)
         ).fetchone()[0]
     return n > 0
+
+
+def update_run_stats(run_id: str, actions_total: int, skipped_cooldown: int,
+                     db_path: str | Path = DEFAULT_DB) -> None:
+    """Record the run's actual queued + skipped-as-already-handled counts."""
+    with _conn(db_path) as c:
+        try:
+            c.execute(
+                "UPDATE runs SET actions_total = ?, skipped_cooldown = ? WHERE run_id = ?",
+                (actions_total, skipped_cooldown, run_id),
+            )
+        except sqlite3.OperationalError:
+            pass  # older db without the columns
 
 
 def latest_run_id(db_path: str | Path = DEFAULT_DB) -> str | None:
