@@ -1,0 +1,29 @@
+[project]
+name = "sally"
+version = "0.1.0"
+description = "Sally — the daily outreach engine for Fleek's GTM Acquisition pipeline"
+requires-python = ">=3.9"
+dependencies = [
+    "pandas>=2.0",
+    "openpyxl>=3.1",      # read the xlsx
+    "python-dateutil>=2.8", # parse the messy dates
+    "rapidfuzz>=3.0",     # fuzzy dedup
+    "typer>=0.12",        # CLI
+    "rich>=13.0",         # pretty CLI output
+    "python-dotenv>=1.0", # load .env
+]
+
+[project.optional-dependencies]
+web = ["streamlit>=1.30"]          # thin queue view
+llm = ["google-generativeai>=0.8"] # default drafting provider
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+sally = "sally.cli:app"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

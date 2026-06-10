@@ -1,0 +1,26 @@
+# internal planning (not part of the deliverable)
+PLAN.md
+
+# env / secrets
+.env
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# generated state + outputs
+data/out/*
+!data/out/.gitkeep
+*.db
+*.db-journal
+*.sqlite
+
+# llm draft cache
+.cache/
+
+# os
+.DS_Store
