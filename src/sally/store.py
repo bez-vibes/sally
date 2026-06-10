@@ -290,6 +290,7 @@ def pending_actions(run_id: str | None = None, db_path: str | Path = DEFAULT_DB)
                    a.group_label, a.value, a.urgency, a.days_quiet,
                    l.store_name, l.handle_norm, l.contact_name, l.stage, l.city,
                    l.email, l.phone, l.last_inbound_text, l.est_monthly_spend_gbp,
+                   l.followers, l.active_listings, l.sales_velocity_30d,
                    l.merged_lead_ids, l.merged_stages, l.merge_conflict, l.merged_count,
                    l.available_channels
             FROM actions a JOIN leads l ON l.lead_key = a.lead_key
