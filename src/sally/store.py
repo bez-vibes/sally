@@ -283,6 +283,50 @@ def set_action_status(action_id: int, status: str, db_path: str | Path = DEFAULT
         c.execute("UPDATE actions SET status = ? WHERE id = ?", (status, action_id))
 
 
+def lead_events(lead_key: str, db_path: str | Path = DEFAULT_DB) -> list[dict]:
+    """A lead's history (stage changes, replies, first-seen), newest first."""
+    with _conn(db_path) as c:
+        rows = c.execute(
+            "SELECT at, type, detail FROM events WHERE lead_key = ? ORDER BY id DESC",
+            (lead_key,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def reset_actions_to_drafted(run_id: str | None = None, db_path: str | Path = DEFAULT_DB) -> int:
+    """Soft demo reset: set a run's done/skipped actions back to 'drafted' so the
+    queue refills. Returns the number reset. Does not touch lead/event history."""
+    with _conn(db_path) as c:
+        run_id = run_id or latest_run_id(db_path)
+        if not run_id:
+            return 0
+        cur = c.execute(
+            "UPDATE actions SET status = 'drafted' WHERE run_id = ? AND status != 'drafted'",
+            (run_id,),
+        )
+        return cur.rowcount
+
+
+def action_counts(run_id: str | None = None, db_path: str | Path = DEFAULT_DB) -> dict:
+    """Channel split of all actions for a run (any status) — for the digest."""
+    with _conn(db_path) as c:
+        run_id = run_id or latest_run_id(db_path)
+        rows = c.execute(
+            "SELECT channel, COUNT(*) n FROM actions WHERE run_id = ? GROUP BY channel",
+            (run_id,),
+        ).fetchall()
+    return {r["channel"]: r["n"] for r in rows}
+
+
+def run_counts(db_path: str | Path = DEFAULT_DB) -> dict:
+    """Headline stats for the UI: total leads + the latest run's row."""
+    init_db(db_path)
+    with _conn(db_path) as c:
+        total = c.execute("SELECT COUNT(*) FROM leads").fetchone()[0]
+        last = c.execute("SELECT * FROM runs ORDER BY at DESC LIMIT 1").fetchone()
+    return {"leads_total": total, "last_run": dict(last) if last else None}
+
+
 def leads_in_cooldown(cooldown_days: int = 4, db_path: str | Path = DEFAULT_DB) -> set[str]:
     """Lead keys that were actioned within `cooldown_days` and have NOT replied or
     advanced since — i.e. already handled, don't re-surface them today. A reply or

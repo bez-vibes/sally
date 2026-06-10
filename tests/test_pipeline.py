@@ -131,6 +131,26 @@ def test_focused_queue_done_cools_skip_resurfaces(tmp_path):
     assert store.pending_actions("run1", db) == []  # both cleared from today's queue
 
 
+def test_demo_helpers(tmp_path):
+    db = str(tmp_path / "d.db")
+    df = _frame([{"lead_id": "1", "handle": "x", "stage": "Replied", "est_monthly_spend_gbp": 5000,
+                  "last_touch_date": "2026-02-01"}])
+    c, _ = clean(df); out, _ = dedupe(c); out, _ = classify(out)
+    store.upsert_leads(out, "run1", db_path=db)
+    store.record_action("h:x", "run1", "dm", "re_engage", "2026-02-03", "hi", 0.9, "why", db_path=db)
+
+    assert store.action_counts(db_path=db) == {"dm": 1}
+    assert store.run_counts(db)["leads_total"] == 1
+    evs = store.lead_events("h:x", db)
+    assert any(e["type"] == "first_seen" for e in evs)
+
+    q = store.pending_actions("run1", db)
+    store.set_action_status(q[0]["action_id"], "done", db)
+    assert store.pending_actions("run1", db) == []      # done -> off the queue
+    assert store.reset_actions_to_drafted("run1", db) == 1
+    assert len(store.pending_actions("run1", db)) == 1   # soft reset -> back on the queue
+
+
 def test_rerun_is_idempotent(tmp_path):
     db = str(tmp_path / "t.db")
     df = _frame([

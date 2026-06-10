@@ -57,6 +57,10 @@ It shows one lead at a time (who, why, and the drafted message) with two buttons
 Both write straight to `data/out/sally.db`. (First time only: `pip install -e ".[web]"`
 to pull in Streamlit.)
 
+A sidebar of controls drives the pipeline without leaving the page: run day 1,
+drop the day-2 batch, soft/hard reset, and post the Slack digest — with a stats
+header and a per-lead history timeline.
+
 ## What it does
 
 1. **Ingest** any tab/batch of leads.
