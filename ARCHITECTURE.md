@@ -63,16 +63,17 @@ next actions updated, nobody messaged twice.
 
 ## The two engines
 
-**Resellers (DM-capped).** Tiered triage, ranked within tier on the axes that matter
-there, then the daily DM slots are filled top-down:
-1. *Deals in flight* (Negotiating, Call Booked) — by value, protect near-revenue first
-2. *Revive warm* (Warm, Replied) — `0.6·value + 0.4·urgency`
-3. *Revival* (Ghosted) — `0.5·value + 0.5·recency`
-4. *Cold* (New, Contacted) — by value, DM only top-quartile whales, only if slots remain
+**One convergence score for every lead (0–100).** Five components, same weights for
+every lead, so scores are comparable across the pipeline: pipeline-stage bonus (up to
++30, live deals highest) + buying power (up to +35, spend-led percentile composite) +
+going cold (up to +20, days since touch) + buying intent (+15 buying … −20 objection,
+from the last reply) + research signals (+5 each, boost only). One `score_components()`
+function feeds both the score and the UI's hover breakdown.
 
-Channel routing (Rule C): top leads get the DM (native channel); resellers-with-email
-below the cap go to email (off the 40/day limit); handle-only leads defer. Urgency uses
-a fixed 60-day horizon; value is a spend-led percentile composite.
+**Resellers (DM-capped).** Sort by score, then fill the 40 DM slots top-down with Rule
+C routing: a handle-lead takes a DM slot until the cap; resellers-with-email beyond the
+cap go to email (off the 40/day limit); handle-only leads defer. Pipeline stage is a
+bonus, not a gate, so a cooling high-value warm lead can outrank a tiny live deal.
 
 **Shops (not capped).** Next step is a state machine — `New → email`, cold → `call to
 chase`, warm → `call to book a visit` — gated by the channels each shop actually has.

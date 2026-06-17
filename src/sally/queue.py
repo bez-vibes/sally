@@ -48,8 +48,8 @@ def build_action_rows(resellers: pd.DataFrame, shops: pd.DataFrame, due_date: st
             "handle_norm": r.get("handle_norm"), "email": r.get("email"),
             "phone": r.get("phone"), "city": r.get("city"),
             "channel": r["action_channel"],
-            "action_type": "re_engage" if r["group_order"] in (1, 2) else
-                           ("advance_deal" if r["group_order"] == 0 else "outreach"),
+            "action_type": {"Deals in flight": "advance_deal", "Revive warm": "re_engage",
+                            "Revival": "re_engage", "Cold": "outreach"}.get(r.get("group_label"), "outreach"),
             "stage": r["stage"], "reason": r["reason"],
             "monthly_spend": r.get("est_monthly_spend_gbp"),
             "last_inbound_text": r.get("last_inbound_text"),

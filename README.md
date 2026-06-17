@@ -77,46 +77,41 @@ header and a per-lead history timeline.
 
 ## How leads are scored
 
-### Resellers (the 40 DM/day cap), in `src/sally/score.py`
+### The convergence score (every lead, 0–100), in `src/sally/score.py`
 
-Resellers are split into groups by pipeline stage, ranked inside each group, and
-the day's DM slots are filled from the top down. Won and Lost are excluded.
+Every lead gets one score from the **same five components with the same weights**, so
+a given input always contributes the same points and scores are comparable across the
+whole pipeline. The score directly orders the queue; pipeline position is just one of
+the components (a stage bonus), not a separate formula. Won and Lost are excluded.
 
-| Group | Stages | Ranked by |
+| Component | Points | Driver |
 |---|---|---|
-| Deals in flight | Negotiating, Call Booked | `value` (closest to revenue, so they go first) |
-| Revive warm | Warm, Replied | `0.6·value + 0.4·urgency` |
-| Revival | Ghosted | `0.5·value + 0.5·recency` (ghosts that went quiet more recently rank higher) |
-| Cold | New, Contacted | `value` (only top-quarter spenders, and only if slots are left) |
+| Pipeline stage | up to +30 | Negotiating/Call Booked highest (live deals), down to New | 
+| Buying power | up to +35 | spend-led: `est_monthly_spend_gbp` (60%) + `sales_velocity_30d` (25%) + `followers` (15%), as percentile ranks; missing filled with the median |
+| Going cold | up to +20 | days since last touch ÷ 60, capped; 0 if never contacted |
+| Buying intent | +15 … −20 | from the last reply: buying +15, scheduling +12, qualifying +6, deferral −6, objection −20 |
+| Research signals | up to +15 | +5 per sourced external signal (boost only — never a penalty) |
 
-Two inputs, each scaled 0 to 1:
+Total is clamped to 0–100. The same `score_components()` function produces the points
+the scorer sums *and* the breakdown the UI shows on hover, so what you see is exactly
+what scored. All weights are tunable constants at the top of `score.py`.
 
-- **value**: a measure of buying power, led by spend. It is a weighted percentile
-  rank of `est_monthly_spend_gbp` (60%, since it is the best guide to what a reseller
-  would spend and every reseller has it), `sales_velocity_30d` (25%) and `followers`
-  (15%). Missing values are filled with the median.
-- **urgency**: days since the last touch divided by 60, capped at 1. The 60-day
-  window is fixed and easy to change. It is 0 for leads never contacted, since they
-  have nothing going cold. `recency` is the inverse, used for ghosted leads.
+Filling the 40 DM slots (Rule C): sort everyone by score, then go down the list — a
+lead with an Instagram handle takes a DM slot until the 40 are used; after that,
+leads that also have an email are emailed instead (email has no daily cap), and
+handle-only leads wait for a later day.
 
-Filling the 40 DM slots (Rule C): go down the ranked list. A lead with an Instagram
-handle takes a DM slot until the 40 are used. After that, leads that also have an
-email are emailed instead (email has no daily cap), and handle-only leads wait for a
-later day. Cold leads only get a DM if their value is in the top quarter (0.75 or
-above) and there are slots left after the warmer groups.
-
-On day one this means all 40 DMs go to warm and active leads, and cold outreach only
-starts once that backlog is worked through. Each lead's reason is written out in the
-queue (for example, "Warm then went quiet 66 days, ~£9k/mo, re-engage before they go
-cold") and broken down in the UI's "Why this lead" panel.
+Because pipeline stage is a bonus rather than a gate, a live deal is usually near the
+top but a high-value, cooling warm lead can edge out a *tiny* live deal — which is
+the more sensible outcome. Raise the stage bonus if you want live deals to always lead.
 
 ### Shops, in `src/sally/sequence.py`
 
-Shops have no DM cap. The next step follows the stage: New gets a first email, cold
-shops (Contacted, Ghosted) get a call to chase, and warm shops (Replied, Warm,
-Negotiating) get a call to book a visit. Each step is limited to the channels a shop
-actually has. Shop priority is `0.6·value + 0.4·stage_prior`, with warmer stages
-weighted higher. Shops worth visiting are grouped by city into a visit plan.
+Shops use the **same convergence score** (so board numbers are comparable), but have
+no DM cap. Their next step follows the stage: New gets a first email, cold shops
+(Contacted, Ghosted) get a call to chase, and warm shops (Replied, Warm, Negotiating)
+get a call to book a visit — each gated by the channels a shop actually has. Shops
+worth visiting are grouped by city into a visit plan.
 
 ### Cooldown
 

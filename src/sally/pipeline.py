@@ -58,6 +58,11 @@ def run_pipeline(file: str, sheet: str | None = None, db: str = store.DEFAULT_DB
     resellers, r_rep = score_resellers(eligible, dm_cap=dm_cap, as_of=as_of)
     shops, plan, s_rep = sequence_shops(eligible, as_of=as_of)
 
+    # persist the score on every scored lead (so boards show a score for all, not just actioned)
+    scores = {**dict(zip(resellers["lead_key"], resellers["rank_score"])),
+              **dict(zip(shops["lead_key"], shops["priority"]))}
+    store.update_scores(scores, db_path=db)
+
     actions = build_action_rows(resellers, shops, due_date=run_date)
     actions = draft_all(actions)
 
@@ -107,6 +112,7 @@ def run_pipeline(file: str, sheet: str | None = None, db: str = store.DEFAULT_DB
         "email": ch.get("email", 0), "call": ch.get("call", 0),
         "top_visit_cities": s_rep["top_visit_cities"], "new": up["new"],
         "updated": up["updated"], "cooldown": len(cold),
+        "pipeline_spend": store.queue_value(run_id, db_path=db)["total"],
     }, paths["brief"], run_date)
 
     return {"run_id": run_id, "run_date": run_date, "upsert": up,

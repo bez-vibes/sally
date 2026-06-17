@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .score import as_of_date, compute_axes
+from .score import as_of_date, compute_axes, score_value
 
 EXCLUDE = {"Won", "Lost"}
 
@@ -52,10 +52,8 @@ def sequence_shops(df: pd.DataFrame, as_of: pd.Timestamp | None = None
 
     as_of = as_of or as_of_date(df)
     s = compute_axes(s, as_of)
-    stage_prior = {"Negotiating": 1.0, "Call Booked": 0.9, "Warm": 0.8, "Replied": 0.75,
-                   "Ghosted": 0.5, "Contacted": 0.45, "New": 0.4}
-    s["stage_prior"] = s["stage"].map(stage_prior).fillna(0.4)
-    s["priority"] = 0.6 * s["value"] + 0.4 * s["stage_prior"]
+    # same consistent convergence score as resellers, so board scores are comparable
+    s["priority"] = s.apply(score_value, axis=1)
 
     steps = s.apply(
         lambda r: _resolve_step(r["stage"], set(str(r.get("available_channels", "")).split(","))),

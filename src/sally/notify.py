@@ -21,6 +21,8 @@ def build_digest_text(summary: dict, brief_path: str, run_date: str) -> str:
         f"*{s.get('actions_total', 0)} actions today* — "
         f"{s.get('dm', 0)} Instagram DMs · {s.get('email', 0)} emails · {s.get('call', 0)} calls",
     ]
+    if s.get("pipeline_spend"):
+        lines.append(f":pound: today's queue reaches *~£{s['pipeline_spend']/1000:.0f}k/mo* of buyer spend")
     cities = s.get("top_visit_cities") or {}
     if cities:
         lines.append("*Visit plan:* " + " · ".join(f"{c} {n}" for c, n in cities.items()))

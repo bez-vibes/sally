@@ -325,6 +325,24 @@ def action_status_map(db_path: str | Path = DEFAULT_DB) -> dict:
     return {r["lead_key"]: r["status"] for r in rows}
 
 
+def update_scores(scores: dict, db_path: str | Path = DEFAULT_DB) -> None:
+    """Persist the convergence score on every scored lead (incl. deferred/un-actioned),
+    so the boards can show a score for all leads, not just the ones we acted on."""
+    with _conn(db_path) as c:
+        c.executemany("UPDATE leads SET priority_score = ? WHERE lead_key = ?",
+                      [(float(v), k) for k, v in scores.items()])
+
+
+def action_score_map(db_path: str | Path = DEFAULT_DB) -> dict:
+    """Latest action's score + reason per lead_key — to show the score on the boards."""
+    with _conn(db_path) as c:
+        rows = c.execute(
+            "SELECT lead_key, priority_score, reason FROM actions a WHERE id = "
+            "(SELECT MAX(id) FROM actions WHERE lead_key = a.lead_key)"
+        ).fetchall()
+    return {r["lead_key"]: {"score": r["priority_score"], "reason": r["reason"]} for r in rows}
+
+
 def lead_events(lead_key: str, db_path: str | Path = DEFAULT_DB) -> list[dict]:
     """A lead's history (stage changes, replies, first-seen), newest first."""
     with _conn(db_path) as c:
@@ -358,6 +376,21 @@ def action_counts(run_id: str | None = None, db_path: str | Path = DEFAULT_DB) -
             (run_id,),
         ).fetchall()
     return {r["channel"]: r["n"] for r in rows}
+
+
+def queue_value(run_id: str | None = None, db_path: str | Path = DEFAULT_DB) -> dict:
+    """Monthly buyer spend reached by a run's queue — total and DM-tier. The
+    commercial size of the day's work."""
+    with _conn(db_path) as c:
+        run_id = run_id or latest_run_id(db_path)
+        rows = c.execute(
+            "SELECT a.channel, COALESCE(l.est_monthly_spend_gbp, 0) AS spend "
+            "FROM actions a JOIN leads l ON l.lead_key = a.lead_key WHERE a.run_id = ?",
+            (run_id,),
+        ).fetchall()
+    total = sum(r["spend"] for r in rows)
+    dm = sum(r["spend"] for r in rows if r["channel"] == "dm")
+    return {"total": total, "dm": dm}
 
 
 def run_counts(db_path: str | Path = DEFAULT_DB) -> dict:

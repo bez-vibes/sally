@@ -1,0 +1,43 @@
+{
+  "_note": "Real, sourced research signals for the seeded demo leads, gathered via Brave Search. Ships with the repo so research lights up without a live key. Live enrichment (research.py with BRAVE_API_KEY) writes to .cache/research.json and merges on top of this.",
+  "susamusa": {
+    "type": "reseller",
+    "signals": [
+      {"layer": "profile", "claim": "Active Depop storefront, a Depop-born brand selling samples, limited drops and a vintage collection", "date": "2026-06", "source_url": "https://www.depop.com/susamusa/", "source_label": "Depop profile"},
+      {"layer": "press", "claim": "Featured Depop seller; founder Asal Tehrani, founded 2020, has dressed Bella Hadid and Kendall Jenner", "date": "2023-05", "source_url": "https://hypebae.com/2023/5/depop-seller-susamusa-clothing-label-kendall-jenner-bella-hadid-interview", "source_label": "Hypebae interview"}
+    ]
+  },
+  "thevintagetwin": {
+    "type": "reseller",
+    "signals": [
+      {"layer": "site", "claim": "Established vintage reseller brand, '1 of 1 vintage and preowned', based in New York and sourced worldwide", "date": "2026-06", "source_url": "https://www.thevintagetwin.com/", "source_label": "Brand site"}
+    ]
+  },
+  "cusponline": {
+    "type": "reseller",
+    "signals": [
+      {"layer": "press", "claim": "Named vintage Depop seller, run by Stella Morison in Melbourne; also trades vintage markets", "date": "2025-10", "source_url": "https://www.russh.com/depop-sellers-90s-y2k/", "source_label": "RUSSH roundup"}
+    ]
+  },
+  "beyondretro|london": {
+    "type": "shop",
+    "signals": [
+      {"layer": "site", "claim": "Established vintage retailer (since 2002); flagship in the Brick Lane vintage scene, ~20,000 handpicked pieces", "date": "2026-06", "source_url": "https://www.beyondretro.com/pages/store-locator-brick-lane", "source_label": "Beyond Retro store locator"},
+      {"layer": "reviews", "claim": "Strong local presence: 54 reviews on Yelp, an east London institution", "date": "2026-03", "source_url": "https://www.yelp.co.uk/biz/beyond-retro-london", "source_label": "Yelp"}
+    ]
+  },
+  "rokit|london": {
+    "type": "shop",
+    "signals": [
+      {"layer": "site", "claim": "Multi-store vintage retailer: four London stores (Covent Garden flagship, two on Brick Lane, Camden Market)", "date": "2026-06", "source_url": "https://www.rokit.co.uk/pages/stores", "source_label": "Rokit stores"},
+      {"layer": "catalogue", "claim": "Stocks vintage Levi's, Carhartt, Nike, Ralph Lauren, Burberry; the brands a wholesale supplier can feed", "date": "2026-06", "source_url": "https://www.rokit.co.uk/", "source_label": "Rokit site"}
+    ]
+  },
+  "cowvintage|nottingham": {
+    "type": "shop",
+    "signals": [
+      {"layer": "news", "claim": "Expanding chain: opened its third Nottingham store in 2023", "date": "2023-06", "source_url": "https://leftlion.co.uk/features/2023/06/cow-thrift-nottingham-vintage-store/", "source_label": "LeftLion"},
+      {"layer": "listing", "claim": "Trading on George Street, Nottingham, with listed phone and opening hours", "date": "2026-06", "source_url": "https://nottingham.cylex-uk.co.uk/company/cow-vintage-19240198.html", "source_label": "Cylex listing"}
+    ]
+  }
+}
