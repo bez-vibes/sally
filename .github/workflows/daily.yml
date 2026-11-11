@@ -5,9 +5,9 @@ name: Sally daily run
 # MVP approach to state on an ephemeral runner; production would use hosted Postgres).
 
 on:
-  schedule:
-    - cron: "0 7 * * 1-5"   # 07:00 UTC, weekdays
-  workflow_dispatch:        # manual "Run workflow" button
+#  schedule:
+#    - cron: "0 7 * * 1-5"   # 07:00 UTC, weekdays
+#  workflow_dispatch:        # manual "Run workflow" button
 
 permissions:
   contents: write
